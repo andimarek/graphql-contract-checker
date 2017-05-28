@@ -2,17 +2,16 @@ package graphql.contract;
 
 
 import com.google.gson.Gson;
-import graphql.ExecutionResult;
-import graphql.GraphQL;
+import graphql.InvalidSyntaxError;
 import graphql.TypeResolutionEnvironment;
 import graphql.introspection.IntrospectionResultToSchema;
 import graphql.language.Argument;
 import graphql.language.Document;
 import graphql.language.Field;
 import graphql.language.FieldDefinition;
-import graphql.language.FragmentDefinition;
 import graphql.language.InterfaceTypeDefinition;
 import graphql.language.Node;
+import graphql.language.SourceLocation;
 import graphql.language.UnionTypeDefinition;
 import graphql.parser.Parser;
 import graphql.schema.DataFetcher;
@@ -29,8 +28,13 @@ import graphql.schema.idl.WiringFactory;
 import graphql.validation.DocumentVisitor;
 import graphql.validation.LanguageTraversal;
 import graphql.validation.TraversalContext;
+import graphql.validation.ValidationError;
+import graphql.validation.Validator;
+import org.antlr.v4.runtime.RecognitionException;
+import org.antlr.v4.runtime.misc.ParseCancellationException;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -51,7 +55,18 @@ public class ContractChecker {
         TypeDefinitionRegistry currentTypeDefinitionRegistry = schemaParser.buildRegistry(currentSchemaDefinition);
 
         Parser parser = new Parser();
-        Document query = parser.parseDocument(queryString);
+        Document query;
+        try {
+            query = parser.parseDocument(queryString);
+        } catch (ParseCancellationException e) {
+            RecognitionException recognitionException = (RecognitionException) e.getCause();
+            SourceLocation sourceLocation = null;
+            if (recognitionException != null) {
+                sourceLocation = new SourceLocation(recognitionException.getOffendingToken().getLine(), recognitionException.getOffendingToken().getCharPositionInLine());
+            }
+            InvalidSyntaxError invalidSyntaxError = new InvalidSyntaxError(sourceLocation);
+            return new ContractCheckResult(false, Collections.emptyList(), Collections.emptyList(), invalidSyntaxError);
+        }
 
         WiringFactory wiringFactory = new WiringFactory() {
             @Override
@@ -96,20 +111,23 @@ public class ContractChecker {
         GraphQLSchema oldSchema = schemaGenerator.makeExecutableSchema(oldTypeDefinitionRegistry, runtimeWiring);
         GraphQLSchema currentSchema = schemaGenerator.makeExecutableSchema(currentTypeDefinitionRegistry, runtimeWiring);
 
-        GraphQL oldGraphQL = GraphQL.newGraphQL(oldSchema).build();
-        ExecutionResult oldResult = oldGraphQL.execute(queryString);
-
-        GraphQL currentGraphQL = GraphQL.newGraphQL(currentSchema).build();
-        ExecutionResult currentResult = oldGraphQL.execute(queryString);
-
         LanguageTraversal languageTraversal = new LanguageTraversal();
         TraversalContext traversalContextOld = new TraversalContext(oldSchema);
         TraversalContext traversalContextCurrent = new TraversalContext(currentSchema);
 
+        Validator validator = new Validator();
+
+        List<ValidationError> validationErrors = validator.validateDocument(currentSchema, query);
+        if (validationErrors.size() > 0) {
+            return new ContractCheckResult(false, validationErrors, Collections.emptyList(), null);
+        }
         CheckerVisitor checkerVisitor = new CheckerVisitor(traversalContextOld, traversalContextCurrent);
         languageTraversal.traverse(query, checkerVisitor);
 
-        return new ContractCheckResult(checkerVisitor.errors);
+        if (checkerVisitor.errors.size() > 0) {
+            return new ContractCheckResult(false, Collections.emptyList(), checkerVisitor.errors, null);
+        }
+        return new ContractCheckResult(true, Collections.emptyList(), Collections.emptyList(), null);
     }
 
 
