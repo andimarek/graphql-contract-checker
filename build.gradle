@@ -1,13 +1,26 @@
-group 'com.graphql-java'
-version '1.0-SNAPSHOT'
+import java.text.SimpleDateFormat
+
+plugins {
+    id "com.jfrog.bintray" version "1.2"
+}
 
 apply plugin: 'java'
+apply plugin: 'maven'
+apply plugin: 'maven-publish'
+
+group 'com.graphql-java'
+def releaseVersion = System.properties.RELEASE_VERSION
+version = releaseVersion ? releaseVersion : new SimpleDateFormat('yyyy-MM-dd\'T\'HH-mm-ss').format(new Date())
 
 sourceCompatibility = 1.8
 
 repositories {
     mavenCentral()
     maven { url  "http://dl.bintray.com/andimarek/graphql-java" }
+}
+
+jar {
+    from "LICENSE"
 }
 
 dependencies {
@@ -18,4 +31,87 @@ dependencies {
     testCompile 'org.codehaus.groovy:groovy-all:2.4.10'
     testCompile 'cglib:cglib-nodep:3.1'
     testCompile 'org.objenesis:objenesis:2.1'
+}
+
+
+task sourcesJar(type: Jar) {
+    dependsOn classes
+    classifier 'sources'
+    from sourceSets.main.allSource
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+
+artifacts {
+    archives sourcesJar
+    archives javadocJar
+}
+
+
+publishing {
+
+    publications {
+
+        graphqlContractChecker(MavenPublication) {
+            version version
+            from components.java
+
+            artifact sourcesJar {
+                classifier "sources"
+            }
+            artifact javadocJar {
+                classifier "javadoc"
+            }
+            pom.withXml {
+                asNode().children().last() + {
+                    resolveStrategy = Closure.DELEGATE_FIRST
+                    name 'graphql-contract-checker'
+                    description 'GraphQL contract checker'
+                    url "https://github.com/andimarek/graphql-contract-checker"
+                    scm {
+                        url "https://github.com/andimarek/graphql-contract-checker"
+                        connection "https://github.com/andimarek/graphql-contract-checker"
+                        developerConnection "https://github.com/andimarek/graphql-contract-checker"
+                    }
+                    licenses {
+                        license {
+                            name 'MIT'
+                            url 'https://github.com/andimarek/graphql-contract-checker/blob/master/LICENCE'
+                            distribution 'repo'
+                        }
+                    }
+                    developers {
+                        developer {
+                            id 'andimarek'
+                            name 'Andreas Marek'
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+bintray {
+    user = System.env.BINTRAY_USER ?: project["bintray.user"]
+    key = System.env.BINTRAY_API_KEY ?: project["bintray.key"]
+    publications = ['graphqlContractChecker']
+    publish = true
+    pkg {
+        repo = 'graphql-contract-checker'
+        name = 'graphql-contract-checker'
+        desc = 'GraphQL contract checker'
+        licenses = ['MIT']
+        vcsUrl = 'https://github.com/andimarek/graphql-contract-checker'
+    }
+}
+
+// all publish tasks depend on the build task
+tasks.withType(PublishToMavenRepository) {
+    dependsOn build
 }
