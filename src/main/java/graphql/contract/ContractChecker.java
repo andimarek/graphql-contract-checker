@@ -3,7 +3,6 @@ package graphql.contract;
 
 import com.google.gson.Gson;
 import graphql.InvalidSyntaxError;
-import graphql.TypeResolutionEnvironment;
 import graphql.introspection.IntrospectionResultToSchema;
 import graphql.language.Argument;
 import graphql.language.Document;
@@ -16,7 +15,6 @@ import graphql.language.UnionTypeDefinition;
 import graphql.parser.Parser;
 import graphql.schema.DataFetcher;
 import graphql.schema.GraphQLArgument;
-import graphql.schema.GraphQLObjectType;
 import graphql.schema.GraphQLOutputType;
 import graphql.schema.GraphQLSchema;
 import graphql.schema.TypeResolver;
@@ -86,12 +84,7 @@ public class ContractChecker {
 
             @Override
             public TypeResolver getTypeResolver(TypeDefinitionRegistry registry, UnionTypeDefinition unionType) {
-                return new TypeResolver() {
-                    @Override
-                    public GraphQLObjectType getType(TypeResolutionEnvironment env) {
-                        return null;
-                    }
-                };
+                return env -> null;
             }
 
             @Override

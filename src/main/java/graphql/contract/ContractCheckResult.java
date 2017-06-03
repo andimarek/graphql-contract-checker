@@ -7,7 +7,7 @@ import java.util.List;
 
 public class ContractCheckResult {
 
-    boolean result;
+    private boolean result;
 
     private final List<String> compatibilityErrors;
     private InvalidSyntaxError invalidSyntaxError;
@@ -37,5 +37,15 @@ public class ContractCheckResult {
 
     public InvalidSyntaxError getInvalidSyntaxError() {
         return invalidSyntaxError;
+    }
+
+    @Override
+    public String toString() {
+        return "ContractCheckResult{" +
+                "result=" + result +
+                ", compatibilityErrors=" + compatibilityErrors +
+                ", invalidSyntaxError=" + invalidSyntaxError +
+                ", validationErrors=" + validationErrors +
+                '}';
     }
 }
